@@ -29,6 +29,14 @@ class TelemetryService:
 
     async def ingest(self, event: TelemetryInput) -> IngestResult:
         received_at = self._now().astimezone(timezone.utc).isoformat()
-        state = self._repository.preview_state(event, received_at)
-        await self._publisher.publish(state)
-        return self._repository.ingest(event, received_at)
+
+        # The repository returns only after its transaction commits, ensuring
+        # that realtime clients receive authoritative state changes.
+        result = self._repository.ingest(event, received_at)
+
+        if result.current_changed:
+            if result.state is None:
+                raise RuntimeError("Changed ingestion result is missing state")
+            await self._publisher.publish(result.state)
+
+        return result
