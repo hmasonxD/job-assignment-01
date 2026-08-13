@@ -265,3 +265,28 @@ def test_migration_preserves_existing_audit_history(tmp_path) -> None:
         assert len(store.list_events(10)) == 2
     finally:
         store.close()
+
+def test_lower_sequence_does_not_move_current_state_backward() -> None:
+    store = TelemetryStore(":memory:")
+    try:
+        store.register_boot(
+            BootRegistrationInput(deviceId="device-01", bootId="boot-a")
+        )
+        store.ingest(
+            telemetry(sequence=2, value=22),
+            "2026-08-12T09:00:01+00:00",
+        )
+
+        delayed = store.ingest(
+            telemetry(sequence=1, value=20),
+            "2026-08-12T09:00:02+00:00",
+        )
+
+        current = store.list_current_states()[0]
+        assert delayed.duplicate is False
+        assert delayed.current_changed is False
+        assert current.sequence == 2
+        assert current.value == 22
+        assert len(store.list_events(10)) == 2
+    finally:
+        store.close()
