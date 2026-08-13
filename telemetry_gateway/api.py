@@ -22,17 +22,22 @@ def create_app(
     database_path: str = "data/telemetry.db",
     repository: TelemetryRepository | None = None,
     now: Callable[[], datetime] | None = None,
+    websocket_buffer_limit: int = 100,
 ) -> FastAPI:
     store = repository or TelemetryStore(database_path)
-    hub = RealtimeHub()
+    hub = RealtimeHub(buffer_limit=websocket_buffer_limit)
     service = TelemetryService(store, hub, now=now)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        yield
-        close = getattr(store, "close", None)
-        if callable(close):
-            close()
+        try:
+            yield
+        finally:
+            # Stop per-client sender tasks before closing shared resources.
+            await hub.close()
+            close = getattr(store, "close", None)
+            if callable(close):
+                close()
 
     app = FastAPI(title="Local Telemetry Gateway", lifespan=lifespan)
     app.state.repository = store
@@ -89,8 +94,10 @@ def create_app(
             while True:
                 await client.receive_text()
         except WebSocketDisconnect:
-            hub.disconnect(client)
+            pass
         except Exception:
-            hub.disconnect(client)
+            pass
+        finally:
+            await hub.disconnect(client)
 
     return app
