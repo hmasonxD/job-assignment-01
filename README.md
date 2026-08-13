@@ -169,3 +169,13 @@ python -m pytest
 - WebSocket: `ws://127.0.0.1:3000/ws`
 - Liveness: `http://127.0.0.1:3000/health/live`
 - Readiness: `http://127.0.0.1:3000/health/ready`
+
+## Verification evidence
+
+The chaos simulator was run with four devices while introducing duplicate, delayed, restart, and clock-skew events. The dashboard remained responsive and displayed the database-backed current state.
+
+![Dashboard receiving chaos simulator telemetry](docs/screenshots/realtime-chaos-dashboard.png)
+
+The application was also stopped and restarted while the dashboard remained open. The server logs show successful WebSocket reconnections followed by snapshot requests to `/api/devices`.
+
+![WebSocket reconnection and snapshot request logs](docs/screenshots/websocket-reconnect-logs.png)
