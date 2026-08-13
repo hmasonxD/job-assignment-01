@@ -109,15 +109,16 @@ class TelemetryStore:
 
             self._connection.execute("BEGIN IMMEDIATE")
             try:
-                # Handle only logical-event conflicts so other database errors still surface.
+                # Limit conflict handling to logical events so unrelated
+                # database errors still surface.
                 insert = self._connection.execute(
-    """
-    INSERT INTO telemetry_events
-        (device_id, boot_id, generation, sequence, device_time,
-         received_at, metric, value)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(device_id, boot_id, sequence) DO NOTHING
-    """,
+                    """
+                    INSERT INTO telemetry_events
+                        (device_id, boot_id, generation, sequence, device_time,
+                         received_at, metric, value)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(device_id, boot_id, sequence) DO NOTHING
+                    """,
                     (
                         event.deviceId,
                         event.bootId,
@@ -134,7 +135,8 @@ class TelemetryStore:
                     self._connection.commit()
                     return IngestResult(duplicate=True, current_changed=False)
 
-                # Device clocks are untrusted; generation and sequence define recency.
+                # Device clocks are untrusted; generation and sequence
+                # define authoritative recency.
                 update = self._connection.execute(
                     """
                     INSERT INTO current_state
@@ -149,10 +151,10 @@ class TelemetryStore:
                         received_at = excluded.received_at,
                         value = excluded.value
                     WHERE excluded.generation > current_state.generation
-   OR (
-       excluded.generation = current_state.generation
-       AND excluded.sequence > current_state.sequence
-   )
+                       OR (
+                           excluded.generation = current_state.generation
+                           AND excluded.sequence > current_state.sequence
+                       )
                     """,
                     (
                         event.deviceId,

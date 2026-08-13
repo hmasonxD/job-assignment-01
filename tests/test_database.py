@@ -1,7 +1,8 @@
 import sqlite3
+
 from telemetry_gateway.database import TelemetryStore
-from telemetry_gateway.models import BootRegistrationInput, TelemetryInput
 from telemetry_gateway.migrations import migration_001
+from telemetry_gateway.models import BootRegistrationInput, TelemetryInput
 
 
 def telemetry(**overrides) -> TelemetryInput:
@@ -81,6 +82,7 @@ def test_repeated_event_from_same_boot_is_a_duplicate() -> None:
         assert len(store.list_events(10)) == 1
     finally:
         store.close()
+
 
 def test_same_sequence_from_different_boots_is_not_a_duplicate() -> None:
     store = TelemetryStore(":memory:")

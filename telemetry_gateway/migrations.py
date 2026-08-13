@@ -61,6 +61,7 @@ def migration_001(connection: sqlite3.Connection) -> None:
         """
     )
 
+
 def migration_002(connection: sqlite3.Connection) -> None:
     # SQLite cannot alter a UNIQUE constraint in place, so rebuild the
     # table while preserving the complete audit history and original IDs.
