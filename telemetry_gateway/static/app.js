@@ -6,9 +6,30 @@ const errorBox = document.querySelector('#error');
 let stopped = false;
 let retryTimer;
 let socket;
+let resyncing = false;
+let queuedUpdates = [];
 
 function stateKey(state) {
   return `${state.deviceId}:${state.metric}`;
+}
+
+function isNewerState(incoming, current) {
+  return (
+    !current ||
+    incoming.generation > current.generation ||
+    (incoming.generation === current.generation &&
+      incoming.sequence > current.sequence)
+  );
+}
+
+function applyState(state) {
+  const key = stateKey(state);
+  const current = states.get(key);
+
+  // Apply the same authoritative ordering rule used by the database.
+  if (isNewerState(state, current)) {
+    states.set(key, state);
+  }
 }
 
 function escapeHtml(value) {
@@ -68,14 +89,39 @@ async function loadSnapshot() {
   render();
 }
 
+async function resyncSnapshot() {
+  resyncing = true;
+  queuedUpdates = [];
+
+  try {
+    await loadSnapshot();
+  } finally {
+    // Apply notifications received during the fetch after the snapshot. The
+    // ordering check prevents an older notification from regressing state.
+    resyncing = false;
+    for (const state of queuedUpdates) {
+      applyState(state);
+    }
+    queuedUpdates = [];
+    render();
+  }
+}
+
 function connect() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-  socket.addEventListener('open', () => {
+  socket.addEventListener('open', async () => {
     status.textContent = 'Realtime connected';
     status.className = 'status online';
-    setError('');
+
+    try {
+      // Every successful connection reloads the database-backed source of truth.
+      await resyncSnapshot();
+      setError('');
+    } catch (error) {
+      setError(error.message);
+    }
   });
 
   socket.addEventListener('message', (event) => {
@@ -83,7 +129,13 @@ function connect() {
     if (message.type !== 'device.state.changed') {
       return;
     }
-    states.set(stateKey(message.data), message.data);
+
+    if (resyncing) {
+      queuedUpdates.push(message.data);
+      return;
+    }
+
+    applyState(message.data);
     render();
   });
 
@@ -100,8 +152,18 @@ function connect() {
   });
 }
 
-loadSnapshot().catch((error) => setError(error.message));
-connect();
+async function start() {
+  try {
+    // Load current state even when the WebSocket server is unavailable.
+    await loadSnapshot();
+  } catch (error) {
+    setError(error.message);
+  }
+
+  connect();
+}
+
+start();
 
 window.addEventListener('beforeunload', () => {
   stopped = true;
