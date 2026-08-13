@@ -53,7 +53,6 @@ class FakeRepository:
     def register_boot(self, _event):
         return BootRegistrationResult("device-01", "boot-a", 1, True)
 
-
     def ingest(self, _event, _received_at):
         self.ingest_calls += 1
         self.operations.append("ingest")

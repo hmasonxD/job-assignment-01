@@ -91,7 +91,6 @@ class TelemetryStore:
             created=True,
         )
 
-
     def ingest(self, event: TelemetryInput, received_at: str) -> IngestResult:
         with self._lock:
             boot = self._get_boot(event.deviceId, event.bootId)
